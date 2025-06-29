@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Smart Energy Graphs - 10 Minute View</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.3/build/global/luxon.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #111;
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+
+    h2 {
+      text-align: center;
+      margin-top: 30px;
+      color: #f1c40f;
+    }
+
+    .chart-container {
+      width: 95%;
+      height: 300px;
+      margin: 20px auto;
+      background: #222;
+      padding: 10px;
+      border-radius: 10px;
+    }
+
+    canvas {
+      width: 100% !important;
+      height: 100% !important;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Smart Energy Graphs (Last 10 Minutes)</h2>
+
+  <div class="chart-container"><canvas id="voltageChart"></canvas></div>
+  <div class="chart-container"><canvas id="currentChart"></canvas></div>
+  <div class="chart-container"><canvas id="powerChart"></canvas></div>
+  <div class="chart-container"><canvas id="energyChart"></canvas></div>
+  <div class="chart-container"><canvas id="temperatureChart"></canvas></div>
+  <div class="chart-container"><canvas id="humidityChart"></canvas></div>
+
+  <script>
+    const firebaseConfig = {
+      databaseURL: "https://fypproject-794c8-default-rtdb.asia-southeast1.firebasedatabase.app/"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    function createTimeChart(ctx, label, color) {
+      return new Chart(ctx, {
+        type: 'line',
+        data: {
+          datasets: [{
+            label: label,
+            data: [],
+            borderColor: color,
+            backgroundColor: color + '22',
+            borderWidth: 2,
+            pointRadius: 0,
+            tension: 0.4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              type: 'time',
+              time: {
+                unit: 'minute',
+                tooltipFormat: 'HH:mm:ss'
+              },
+              ticks: { color: 'white' },
+              grid: { color: '#444' },
+              min: Date.now() - 10 * 60 * 1000,
+              max: Date.now()
+            },
+            y: {
+              beginAtZero: true,
+              ticks: { color: 'white' },
+              grid: { color: '#444' }
+            }
+          },
+          plugins: {
+            legend: { labels: { color: 'white' } }
+          }
+        }
+      });
+    }
+
+    const charts = {
+      voltage: createTimeChart(document.getElementById('voltageChart').getContext('2d'), 'Voltage (V)', '#3498db'),
+      current: createTimeChart(document.getElementById('currentChart').getContext('2d'), 'Current (A)', '#e67e22'),
+      power: createTimeChart(document.getElementById('powerChart').getContext('2d'), 'Power (W)', '#f1c40f'),
+      energy: createTimeChart(document.getElementById('energyChart').getContext('2d'), 'Energy (Wh)', '#2ecc71'),
+      temperature: createTimeChart(document.getElementById('temperatureChart').getContext('2d'), 'Temperature (°C)', '#e74c3c'),
+      humidity: createTimeChart(document.getElementById('humidityChart').getContext('2d'), 'Humidity (%)', '#9b59b6')
+    };
+
+    function updateChart(chart, value, timestamp) {
+      chart.data.datasets[0].data.push({ x: timestamp, y: value });
+
+      // Remove data older than 10 minutes
+      const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+      chart.data.datasets[0].data = chart.data.datasets[0].data.filter(
+        point => point.x >= tenMinutesAgo
+      );
+
+      chart.options.scales.x.min = tenMinutesAgo;
+      chart.options.scales.x.max = Date.now();
+      chart.update();
+    }
+
+    function fetchData(path, chart) {
+      db.ref("sensor/" + path).once("value").then(snapshot => {
+        const value = snapshot.val();
+        const now = Date.now();
+        updateChart(chart, value, now);
+      });
+    }
+
+    setInterval(() => {
+      fetchData("voltage", charts.voltage);
+      fetchData("current", charts.current);
+      fetchData("power", charts.power);
+      fetchData("energy", charts.energy);
+      fetchData("temperature", charts.temperature);
+      fetchData("humidity", charts.humidity);
+    }, 5000);
+  </script>
+
+</body>
+</html>
